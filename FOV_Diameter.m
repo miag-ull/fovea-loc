@@ -5,16 +5,16 @@ retinalImageR = retinalImage(:, :, 1);
 % FOV mask extraction (this piece of code may only be applicable to certain images)
 level = graythresh(retinalImageR);
 blackMask = retinalImageR < level*255;
-ccBlackMask = bwconncomp(blackMask);
+ccBlackMask = bwconncomp(~blackMask);
 blackMaskLabels = labelmatrix(ccBlackMask);
 blackMaskProps = regionprops(blackMaskLabels, 'Area');
 blackMaskAreas = [ blackMaskProps.Area ];
 [ ~, indmaxblackMaskAreas ] = max(blackMaskAreas);
-FOVmask = ~(blackMaskLabels == indmaxblackMaskAreas);
-% imtool(FOVmask)
+FOVmask = blackMaskLabels == indmaxblackMaskAreas;
+
 [ y, x ] = find(FOVmask);
-miny = min(y(:));
-maxy = max(y(:));
-D = maxy - miny;
+minY = min(y(:));
+maxY = max(y(:));
+D = maxY - minY;
 
 end

@@ -1,7 +1,8 @@
-function [ R_Error, R2_Error, R4_Error ] = foveaLocalizationMessidor(retDir, groundTruthData)
+function [ R_Error, R2_Error, R4_Error, R8_Error, Dnorm ] = foveaLocalizationMessidor(retDir, groundTruthData)
 
 % retDir: Path to the folder with Messidor images (available at https://www.adcis.net/es/descargas-de-software-de-terceros/messidor-es/)
 % groundTruthData: Path to the file with the groundtruth x, y coords of the center of the fovea (available at http://www.uhu.es/retinopathy/eng/bd.php)
+% For a detailed explanation of the output variables and the program, itself, see the associated paper
 
 warning('OFF', 'all')
 
@@ -15,6 +16,8 @@ euclideanError = zeros(1, nImages);
 R_Error = zeros(1, nImages);
 R2_Error = zeros(1, nImages);
 R4_Error = zeros(1, nImages);
+R8_Error = zeros(1, nImages);
+Dnorm = zeros(1, nImages);
 
 for i = 1:nImages
     i
@@ -22,7 +25,7 @@ for i = 1:nImages
     nrows = size(retinalImage, 1);
     ncols = size(retinalImage, 2);
     retinalImageG = retinalImage(:, :, 2);  % the G color channel is selected
-    
+        
     % This piece of code corresponds to the method for optic disc localization and segmentation published in:
     % "Contrast based circular approximation for accurate and robust optic disc segmentation in retinal images"
     if nrows == 960
@@ -40,23 +43,23 @@ for i = 1:nImages
     ncols1 = size(retinalImage1, 2);
     xCenter = round(xCenter/(ncols1/ncols));
     yCenter = round(yCenter/(nrows1/nrows));
-    FOD = FOV_Diameter( retinalImage );
-    odRadius = 0.15*((FOD)/2);
+    FOD = FOV_Diameter( retinalImage ); % Diameter of the retina
+    odRadius = 0.15*((FOD)/2);  % Optic disc radius
     
-    % The previous anatomical information allows to estimate the center of the fovea localization
-    % The original image is cropped around the estimated center
+    % The previous anatomical information is used to obtain an initial estimate of the center of the fovea
+    % The original image is cropped around this approximate location
     minYFoveaBox = yCenter - (a/4) * odRadius;
     maxYFoveaBox = yCenter + a * odRadius;
     if xCenter <= round(ncols/2)
-        minXFoveaBox = xCenter + (2.5 * 2 * odRadius) - (b * odRadius);
-        maxXFoveaBox = xCenter + (2.5 * 2 * odRadius) + (b * odRadius);
+        minXFoveaBox = max(1, xCenter + (2.5 * 2 * odRadius) - (0.75 * b * odRadius));
+        maxXFoveaBox = min(ncols, xCenter + (2.5 * 2 * odRadius) + (0.75 * b * odRadius));
     else
-        minXFoveaBox = xCenter - (2.5 * 2 * odRadius) - (b * odRadius);
-        maxXFoveaBox = xCenter - (2.5 * 2 * odRadius) + (b * odRadius);
+        minXFoveaBox = max(1, xCenter - (2.5 * 2 * odRadius) - (0.75 * b * odRadius));
+        maxXFoveaBox = min(ncols, xCenter - (2.5 * 2 * odRadius) + (0.75 * b * odRadius));
     end
     foveaImage = retinalImageG(minYFoveaBox:maxYFoveaBox, minXFoveaBox:maxXFoveaBox);
     foveaImage = imgaussfilt(foveaImage, 1);    % The cropped image is smoothed by applying a gaussian filter
-    
+        
     % The spatial-color histogram for x, G is computed
     schxG = histc(foveaImage, 0:255);
     schxG1 = schxG > threshold; % The histogram is thresholded
@@ -84,6 +87,7 @@ for i = 1:nImages
     yFovea = xCoord(indminyCoord) + (minYFoveaBox - 1); % The obtained value for y is rescaled to the dimensions of the original image
     
     euclideanError(i) = sqrt((xFovea - groundTruthData1(i, 2))^2 + (yFovea - groundTruthData1(i, 3))^2);
+    Dnorm(i) = (euclideanError(i)*100)/FOD;
     R = groundTruthData1(i, 1)/2;
     if euclideanError(i) <= R
         R_Error(i) = 1;
@@ -93,6 +97,9 @@ for i = 1:nImages
     end
     if euclideanError(i) <= R/4
         R4_Error(i) = 1;
+    end
+    if euclideanError(i) <= R/8
+        R8_Error(i) = 1;
     end
 end
    
